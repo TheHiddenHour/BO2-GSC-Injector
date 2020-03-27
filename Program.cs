@@ -34,11 +34,28 @@ namespace bo2_gsc_injector {
             Console.WriteLine("No errors in project scripts.");
 
             // Compile project script 
-            ParseTree tree = parser.Parse(projectScript);
-            Compiler compiler = new Compiler(tree, "maps/mp/gametypes/_clientids.gsc");
-            byte[] scriptBuffer = compiler.CompileScript();
+            byte[] scriptBuffer = ConstructProjectBuffer(parser, projectScript, "maps/mp/gametypes/_clientids.gsc");
 
             // Console connection 
+            SelectAPI targetAPI = DeterminePS3API(api);
+            PS3API PS3 = ConnectAndAttach(targetAPI);
+            if(PS3 == null) { // Could not connect or attach 
+                return;
+            }
+
+            // Script injection 
+            InjectScript(PS3, config.MP, scriptBuffer);
+            Console.WriteLine("Script injected ({0}) bytes.", scriptBuffer.Length.ToString());
+        }
+
+        static byte[] ConstructProjectBuffer(Parser parser, string projectScript, string scriptPath) {
+            ParseTree tree = parser.Parse(projectScript);
+            Compiler compiler = new Compiler(tree, scriptPath);
+
+            return compiler.CompileScript();
+        }
+
+        static SelectAPI DeterminePS3API(string api) {
             SelectAPI targetAPI;
             switch(api) {
                 default:
@@ -54,14 +71,22 @@ namespace bo2_gsc_injector {
                     break;
             }
 
-            PS3API PS3 = new PS3API(targetAPI);
-            PS3.ConnectTarget();
-            PS3.AttachProcess();
+            return targetAPI;
+        }
+        
+        static PS3API ConnectAndAttach(SelectAPI api) {
+            PS3API PS3 = new PS3API(api);
+            if(!PS3.ConnectTarget()) {
+                Console.WriteLine("[ERROR] Could not connect and attach");
+                return null;
+            }
+            if(!PS3.AttachProcess()) {
+                Console.WriteLine("[ERROR] Could not attach to process");
+                return null;
+            }
             Console.WriteLine("Connected and attached to {0}.", PS3.GetConsoleName());
 
-            // Script injection 
-            InjectScript(PS3, config.MP, scriptBuffer);
-            Console.WriteLine("Script injected ({0}) bytes.", scriptBuffer.Length.ToString());
+            return PS3;
         }
 
         static string ConstructProjectScript(Parser parser, string projectDirectory) {
