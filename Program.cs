@@ -9,15 +9,18 @@ using System.IO;
 
 namespace bo2_gsc_injector {
     class Program {
-        static void Main(string api, string projectDirectory) {
-            if(api == null) {
-                Console.WriteLine("No API parameter specified");
+        static void Main(string[] args) {
+            if(args.Length < 1) {
+                Console.WriteLine("[ERROR] No API parameter specified");
                 return;
             }
-            else if(projectDirectory == null) {
-                Console.WriteLine("No project directory parameter specified");
+            else if(args.Length < 2) {
+                Console.WriteLine("[ERROR] No project directory parameter specified");
                 return;
             }
+
+            string api = args[0];
+            string projectDirectory = args[1];
 
             // Configuration config lol 
             Configuration config = LoadConfigurationFile();
@@ -26,17 +29,28 @@ namespace bo2_gsc_injector {
             Grammar grammar = new GSCGrammar();
             Parser parser = new Parser(grammar);
 
+            // Check if project contains main.gsc at root 
+            bool projectHasMain = ProjectContainsMain(projectDirectory);
+            if(!projectHasMain) {
+                Console.WriteLine("[ERROR] main.gsc not found in root of {0}", projectDirectory);
+                return;
+            }
+
             // Construct project script 
+            Console.WriteLine("Constructing project script...");
             string projectScript = ConstructProjectScript(parser, projectDirectory);
             if(projectScript == null) { // Syntax error in project script 
                 return;
             }
-            Console.WriteLine("No errors in project scripts.");
+            Console.WriteLine("Project script constructed successfully");
 
             // Compile project script 
+            Console.WriteLine("Compiling project script...");
             byte[] scriptBuffer = ConstructProjectBuffer(parser, projectScript, "maps/mp/gametypes/_clientids.gsc");
+            Console.WriteLine("Project script compiled successfully");
 
             // Console connection 
+            Console.WriteLine("Connecting and attaching to console...");
             SelectAPI targetAPI = DeterminePS3API(api);
             PS3API PS3 = ConnectAndAttach(targetAPI);
             if(PS3 == null) { // Could not connect or attach 
@@ -44,6 +58,7 @@ namespace bo2_gsc_injector {
             }
 
             // Script injection 
+            Console.WriteLine("Injecting script...");
             InjectScript(PS3, config.MP, scriptBuffer);
             Console.WriteLine("Script injected ({0}) bytes.", scriptBuffer.Length.ToString());
         }
@@ -60,11 +75,13 @@ namespace bo2_gsc_injector {
             switch(api) {
                 default:
                 case "tm":
+                case "TM":
                 case "tmapi":
                 case "TMAPI":
                     targetAPI = SelectAPI.TargetManager;
                     break;
                 case "cc":
+                case "CC":
                 case "ccapi":
                 case "CCAPI":
                     targetAPI = SelectAPI.ControlConsole;
@@ -89,9 +106,28 @@ namespace bo2_gsc_injector {
             return PS3;
         }
 
+        static bool ProjectContainsMain(string projectDirectory) {
+            string main_loc = Path.Combine(projectDirectory, "main.gsc");
+
+            return File.Exists(main_loc);
+        }
+
         static string ConstructProjectScript(Parser parser, string projectDirectory) {
-            string projectDir = "test-project";
-            List<string> projectFiles = new List<string>(Directory.GetFiles(projectDir, "*.gsc", SearchOption.AllDirectories));
+            // Add main.gsc to the top of the list 
+            List<string> projectFiles = new List<string>(Directory.GetFiles(projectDirectory, "*.gsc", SearchOption.AllDirectories));
+            for(int i = 0; i < projectFiles.Count; i++) {
+                string file = projectFiles[i];
+                if(Path.GetFileName(file) == "main.gsc") {
+                    string main = projectFiles[i];
+
+                    projectFiles.RemoveAt(i);
+                    projectFiles.Insert(0, main);
+
+                    break;
+                }
+            }
+
+            // Actually construct script 
             string projectScript = "";
             foreach(string file in projectFiles) {
                 string fileContents = File.ReadAllText(file);
@@ -101,7 +137,7 @@ namespace bo2_gsc_injector {
                 if(_hasErrors) {
                     return null;
                 }
-                projectScript += fileContents;
+                projectScript += fileContents + "\n";
                 Console.WriteLine("No syntax errors in {0}.", file);
             }
 

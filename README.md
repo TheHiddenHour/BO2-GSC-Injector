@@ -1,14 +1,16 @@
 # bo2-gsc-injector
 A BO2 1.19 GSC script injector for jailbroken PlayStation 3s.
 
-## Parameters 
-`--api : tm TM TMAPI cc CC CCAPI`
+This doesn't work yet. Well, it kind of does. I'm still working on it.
 
-`--project-directory: "test-project-directory"`
+## Parameters 
+`args[0] : tm TM TMAPI cc CC CCAPI`
+
+`args[1] : project_dir"`
 
 ## Credits 
 dtx12 - original compiler
 
-CraigChrist8239 - original console compiler 
+CraigChrist8239 - original console compiler port
 
 anthonything / damnmagician / SeriousHD - updated console compiler 
