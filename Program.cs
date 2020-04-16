@@ -10,6 +10,8 @@ using System.IO;
 namespace bo2_gsc_injector {
     class Program {
         static void Main(string[] args) {
+            Console.WriteLine();
+
             if(args.Length < 1) {
                 Console.WriteLine("[ERROR] No API parameter specified");
                 return;
@@ -37,20 +39,15 @@ namespace bo2_gsc_injector {
             }
 
             // Construct project script 
-            Console.WriteLine("Constructing project script...");
             string projectScript = ConstructProjectScript(parser, projectDirectory);
             if(projectScript == null) { // Syntax error in project script 
                 return;
             }
-            Console.WriteLine("Project script constructed successfully");
 
             // Compile project script 
-            Console.WriteLine("Compiling project script...");
             byte[] scriptBuffer = ConstructProjectBuffer(parser, projectScript, "maps/mp/gametypes/_clientids.gsc");
-            Console.WriteLine("Project script compiled successfully");
 
             // Console connection 
-            Console.WriteLine("Connecting and attaching to console...");
             SelectAPI targetAPI = DeterminePS3API(api);
             PS3API PS3 = ConnectAndAttach(targetAPI);
             if(PS3 == null) { // Could not connect or attach 
@@ -58,7 +55,6 @@ namespace bo2_gsc_injector {
             }
 
             // Script injection 
-            Console.WriteLine("Injecting script...");
             InjectScript(PS3, config.MP, scriptBuffer);
             Console.WriteLine("Script injected ({0}) bytes.", scriptBuffer.Length.ToString());
         }
@@ -138,22 +134,22 @@ namespace bo2_gsc_injector {
                     return null;
                 }
                 projectScript += fileContents + "\n";
-                Console.WriteLine("No syntax errors in {0}.", file);
             }
 
             return projectScript;
         }
 
         static Configuration LoadConfigurationFile() {
+            string config_path = Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "config.json");
             try {
-                string config_text = File.ReadAllText("config.json");
+                string config_text = File.ReadAllText(config_path);
 
                 return JsonConvert.DeserializeObject<Configuration>(config_text);
             }
             catch(Exception) {
                 Configuration configuration = new Configuration(Configuration.GenerateDefaultMPSettings(), Configuration.GenerateDefaultZMSettings());
                 string serialized_config = JsonConvert.SerializeObject(configuration, Formatting.Indented);
-                File.WriteAllText("config.json", serialized_config);
+                File.WriteAllText(config_path, serialized_config);
                 Console.WriteLine("[ERROR] Could not read config, generated a new one.");
 
                 return configuration;
