@@ -11,11 +11,13 @@ namespace bo2_gsc_injector {
     class Program {
         static void Main(string[] args) {
             if(args.Length < 1) {
-                Console.WriteLine("[ERROR] No API parameter specified");
+                PrintWithColor("[ERROR] No API parameter specified", ConsoleColor.Red);
+
                 return;
             }
             else if(args.Length < 2) {
-                Console.WriteLine("[ERROR] No project directory parameter specified");
+                PrintWithColor("[ERROR] No project directory parameter specified", ConsoleColor.Red);
+
                 return;
             }
 
@@ -31,8 +33,7 @@ namespace bo2_gsc_injector {
 
             // Check if project contains main.gsc at root 
             bool projectHasMain = ProjectContainsMain(projectDirectory);
-            if(!projectHasMain) {
-                Console.WriteLine("[ERROR] main.gsc not found in root of {0}", projectDirectory);
+            if(!projectHasMain) { // Project doesn't contain main.gsc at directory root 
                 return;
             }
 
@@ -53,7 +54,8 @@ namespace bo2_gsc_injector {
 
             // Script injection 
             InjectScript(PS3, config.MP, scriptBuffer);
-            Console.WriteLine("Script injected ({0}) bytes.", scriptBuffer.Length.ToString());
+            string message = string.Format("[SUCCESS] Script injected ({0} bytes).", scriptBuffer.Length.ToString());
+            PrintWithColor(message, ConsoleColor.Green);
         }
 
         static Configuration LoadConfigurationFile() {
@@ -67,7 +69,7 @@ namespace bo2_gsc_injector {
                 Configuration configuration = new Configuration(Configuration.GenerateDefaultMPSettings(), Configuration.GenerateDefaultZMSettings());
                 string serialized_config = JsonConvert.SerializeObject(configuration, Formatting.Indented);
                 File.WriteAllText(config_path, serialized_config);
-                Console.WriteLine("[ERROR] Could not read config, generated a new one.");
+                PrintWithColor("[INFO] Could not read config, generated a new one.", ConsoleColor.Blue);
 
                 return configuration;
             }
@@ -76,7 +78,13 @@ namespace bo2_gsc_injector {
         static bool ProjectContainsMain(string projectDirectory) {
             string main_location = Path.Combine(projectDirectory, "main.gsc");
 
-            return File.Exists(main_location);
+            bool contains_main = File.Exists(main_location);
+            if(!contains_main) {
+                string message = string.Format("[ERROR] main.gsc not found in root of {0}", projectDirectory);
+                PrintWithColor(message, ConsoleColor.Red);
+            }
+
+            return contains_main;
         }
 
         static string ConstructProjectScript(Parser parser, string projectDirectory) {
@@ -103,7 +111,7 @@ namespace bo2_gsc_injector {
                     // Syntax checking 
                     LogMessage msg = _tree.ParserMessages[0];
                     string msgStr = string.Format("[ERROR] Bad syntax at line {0} in {1}.", msg.Location.Line.ToString(), file);
-                    Console.WriteLine(msgStr);
+                    PrintWithColor(msgStr, ConsoleColor.Red);
 
                     return null;
                 }
@@ -134,7 +142,6 @@ namespace bo2_gsc_injector {
                 case "ccapi":
                 case "CCAPI":
                     return SelectAPI.ControlConsole;
-                    break;
             }
         }
         
@@ -143,19 +150,21 @@ namespace bo2_gsc_injector {
 
             try {
                 if (!PS3.ConnectTarget()) {
-                    Console.WriteLine("[ERROR] Could not connect and attach.");
+                    PrintWithColor("[ERROR] Could not connect and attach.", ConsoleColor.Red);
                     return null;
                 }
                 if (!PS3.AttachProcess()) {
-                    Console.WriteLine("[ERROR] Could not attach to process.");
+                    PrintWithColor("[ERROR] Could not attach to process.", ConsoleColor.Red);
                     return null;
                 }
-                Console.WriteLine("Connected and attached to {0}.", PS3.GetConsoleName());
+                string message = string.Format("[INFO] Connected and attached to {0}.", PS3.GetConsoleName());
+                PrintWithColor(message, ConsoleColor.Blue);
 
                 return PS3;
             }
             catch {
-                Console.WriteLine("[ERROR] Could not connect or attach. Check internet connection.");
+                PrintWithColor("[ERROR] Could not connect or attach. Check internet connection.", ConsoleColor.Red);
+
                 return null;
             }
         }
@@ -163,6 +172,12 @@ namespace bo2_gsc_injector {
         static void InjectScript(PS3API console, Configuration.Gametype gametype, byte[] scriptBuffer) {
             console.Extension.WriteUInt32(gametype.Defaults.PointerAddress, gametype.Customs.BufferAddress); // Overwrite script pointer 
             console.Extension.WriteBytes(gametype.Customs.BufferAddress, scriptBuffer); // Write script in memory 
+        }
+
+        static void PrintWithColor(string message, ConsoleColor color) {
+            Console.ForegroundColor = color;
+            Console.WriteLine(message);
+            Console.ResetColor();
         }
     }
 }
