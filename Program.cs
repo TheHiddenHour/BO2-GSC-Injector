@@ -10,8 +10,6 @@ using System.IO;
 namespace bo2_gsc_injector {
     class Program {
         static void Main(string[] args) {
-            Console.WriteLine();
-
             if(args.Length < 1) {
                 Console.WriteLine("[ERROR] No API parameter specified");
                 return;
@@ -48,8 +46,7 @@ namespace bo2_gsc_injector {
             byte[] scriptBuffer = ConstructProjectBuffer(parser, projectScript, "maps/mp/gametypes/_clientids.gsc");
 
             // Console connection 
-            SelectAPI targetAPI = DeterminePS3API(api);
-            PS3API PS3 = ConnectAndAttach(targetAPI);
+            PS3API PS3 = ConnectAndAttach(DeterminePS3API(api));
             if(PS3 == null) { // Could not connect or attach 
                 return;
             }
@@ -67,45 +64,48 @@ namespace bo2_gsc_injector {
         }
 
         static SelectAPI DeterminePS3API(string api) {
-            SelectAPI targetAPI;
             switch(api) {
                 default:
                 case "tm":
                 case "TM":
                 case "tmapi":
                 case "TMAPI":
-                    targetAPI = SelectAPI.TargetManager;
-                    break;
+                    return SelectAPI.TargetManager;
                 case "cc":
                 case "CC":
                 case "ccapi":
                 case "CCAPI":
-                    targetAPI = SelectAPI.ControlConsole;
+                    return SelectAPI.ControlConsole;
                     break;
             }
-
-            return targetAPI;
         }
         
         static PS3API ConnectAndAttach(SelectAPI api) {
             PS3API PS3 = new PS3API(api);
-            if(!PS3.ConnectTarget()) {
-                Console.WriteLine("[ERROR] Could not connect and attach");
-                return null;
-            }
-            if(!PS3.AttachProcess()) {
-                Console.WriteLine("[ERROR] Could not attach to process");
-                return null;
-            }
-            Console.WriteLine("Connected and attached to {0}.", PS3.GetConsoleName());
 
-            return PS3;
+            try {
+                if (!PS3.ConnectTarget()) {
+                    Console.WriteLine("[ERROR] Could not connect and attach.");
+                    return null;
+                }
+                if (!PS3.AttachProcess()) {
+                    Console.WriteLine("[ERROR] Could not attach to process.");
+                    return null;
+                }
+                Console.WriteLine("Connected and attached to {0}.", PS3.GetConsoleName());
+
+                return PS3;
+            }
+            catch {
+                Console.WriteLine("[ERROR] Could not connect or attach. Check internet connection.");
+                return null;
+            }
         }
 
         static bool ProjectContainsMain(string projectDirectory) {
-            string main_loc = Path.Combine(projectDirectory, "main.gsc");
+            string main_location = Path.Combine(projectDirectory, "main.gsc");
 
-            return File.Exists(main_loc);
+            return File.Exists(main_location);
         }
 
         static string ConstructProjectScript(Parser parser, string projectDirectory) {
@@ -128,11 +128,15 @@ namespace bo2_gsc_injector {
             foreach(string file in projectFiles) {
                 string fileContents = File.ReadAllText(file);
                 ParseTree _tree = parser.Parse(fileContents);
-                // Syntax checking 
-                bool _hasErrors = PrintSyntaxErrors(_tree, file);
-                if(_hasErrors) {
+                if(_tree.ParserMessages.Count > 0) { // If there are any messages at all (messages are parser errors) 
+                    // Syntax checking 
+                    LogMessage msg = _tree.ParserMessages[0];
+                    string msgStr = string.Format("[ERROR] Bad syntax at line {0} in {1}.", msg.Location.Line.ToString(), file);
+                    Console.WriteLine(msgStr);
+
                     return null;
                 }
+
                 projectScript += fileContents + "\n";
             }
 
@@ -154,29 +158,6 @@ namespace bo2_gsc_injector {
 
                 return configuration;
             }
-        }
-
-        static bool PrintSyntaxErrors(ParseTree tree, string scriptName) {
-            bool hasErrors = false;
-            string[] syntaxErrors = GetSyntaxErrors(tree, scriptName);
-            if(syntaxErrors.Length > 0) {
-                hasErrors = true;
-                foreach(string error in syntaxErrors) {
-                    Console.WriteLine(error);
-                }
-            }
-
-            return hasErrors;
-        }
-
-        static string[] GetSyntaxErrors(ParseTree tree, string scriptName) {
-            List<string> errors = new List<string>();
-            foreach(LogMessage msg in tree.ParserMessages) {
-                string error = string.Format("[ERROR] Bad syntax at line {0} in {1}.", msg.Location.Line.ToString(), scriptName);
-                errors.Add(error);
-            }
-
-            return errors.ToArray();
         }
 
         static void InjectScript(PS3API console, Configuration.Gametype gametype, byte[] scriptBuffer) {
