@@ -56,6 +56,64 @@ namespace bo2_gsc_injector {
             Console.WriteLine("Script injected ({0}) bytes.", scriptBuffer.Length.ToString());
         }
 
+        static Configuration LoadConfigurationFile() {
+            string config_path = Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "config.json");
+            try {
+                string config_text = File.ReadAllText(config_path);
+
+                return JsonConvert.DeserializeObject<Configuration>(config_text);
+            }
+            catch (Exception) {
+                Configuration configuration = new Configuration(Configuration.GenerateDefaultMPSettings(), Configuration.GenerateDefaultZMSettings());
+                string serialized_config = JsonConvert.SerializeObject(configuration, Formatting.Indented);
+                File.WriteAllText(config_path, serialized_config);
+                Console.WriteLine("[ERROR] Could not read config, generated a new one.");
+
+                return configuration;
+            }
+        }
+
+        static bool ProjectContainsMain(string projectDirectory) {
+            string main_location = Path.Combine(projectDirectory, "main.gsc");
+
+            return File.Exists(main_location);
+        }
+
+        static string ConstructProjectScript(Parser parser, string projectDirectory) {
+            // Add main.gsc to the top of the list 
+            List<string> projectFiles = new List<string>(Directory.GetFiles(projectDirectory, "*.gsc", SearchOption.AllDirectories));
+            for (int i = 0; i < projectFiles.Count; i++) {
+                string file = projectFiles[i];
+                if (Path.GetFileName(file) == "main.gsc") {
+                    string main = projectFiles[i];
+
+                    projectFiles.RemoveAt(i);
+                    projectFiles.Insert(0, main);
+
+                    break;
+                }
+            }
+
+            // Actually construct script 
+            string projectScript = "";
+            foreach (string file in projectFiles) {
+                string fileContents = File.ReadAllText(file);
+                ParseTree _tree = parser.Parse(fileContents);
+                if (_tree.ParserMessages.Count > 0) { // If there are any messages at all (messages are parser errors) 
+                    // Syntax checking 
+                    LogMessage msg = _tree.ParserMessages[0];
+                    string msgStr = string.Format("[ERROR] Bad syntax at line {0} in {1}.", msg.Location.Line.ToString(), file);
+                    Console.WriteLine(msgStr);
+
+                    return null;
+                }
+
+                projectScript += fileContents + "\n";
+            }
+
+            return projectScript;
+        }
+
         static byte[] ConstructProjectBuffer(Parser parser, string projectScript, string scriptPath) {
             ParseTree tree = parser.Parse(projectScript);
             Compiler compiler = new Compiler(tree, scriptPath);
@@ -99,64 +157,6 @@ namespace bo2_gsc_injector {
             catch {
                 Console.WriteLine("[ERROR] Could not connect or attach. Check internet connection.");
                 return null;
-            }
-        }
-
-        static bool ProjectContainsMain(string projectDirectory) {
-            string main_location = Path.Combine(projectDirectory, "main.gsc");
-
-            return File.Exists(main_location);
-        }
-
-        static string ConstructProjectScript(Parser parser, string projectDirectory) {
-            // Add main.gsc to the top of the list 
-            List<string> projectFiles = new List<string>(Directory.GetFiles(projectDirectory, "*.gsc", SearchOption.AllDirectories));
-            for(int i = 0; i < projectFiles.Count; i++) {
-                string file = projectFiles[i];
-                if(Path.GetFileName(file) == "main.gsc") {
-                    string main = projectFiles[i];
-
-                    projectFiles.RemoveAt(i);
-                    projectFiles.Insert(0, main);
-
-                    break;
-                }
-            }
-
-            // Actually construct script 
-            string projectScript = "";
-            foreach(string file in projectFiles) {
-                string fileContents = File.ReadAllText(file);
-                ParseTree _tree = parser.Parse(fileContents);
-                if(_tree.ParserMessages.Count > 0) { // If there are any messages at all (messages are parser errors) 
-                    // Syntax checking 
-                    LogMessage msg = _tree.ParserMessages[0];
-                    string msgStr = string.Format("[ERROR] Bad syntax at line {0} in {1}.", msg.Location.Line.ToString(), file);
-                    Console.WriteLine(msgStr);
-
-                    return null;
-                }
-
-                projectScript += fileContents + "\n";
-            }
-
-            return projectScript;
-        }
-
-        static Configuration LoadConfigurationFile() {
-            string config_path = Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "config.json");
-            try {
-                string config_text = File.ReadAllText(config_path);
-
-                return JsonConvert.DeserializeObject<Configuration>(config_text);
-            }
-            catch(Exception) {
-                Configuration configuration = new Configuration(Configuration.GenerateDefaultMPSettings(), Configuration.GenerateDefaultZMSettings());
-                string serialized_config = JsonConvert.SerializeObject(configuration, Formatting.Indented);
-                File.WriteAllText(config_path, serialized_config);
-                Console.WriteLine("[ERROR] Could not read config, generated a new one.");
-
-                return configuration;
             }
         }
 
